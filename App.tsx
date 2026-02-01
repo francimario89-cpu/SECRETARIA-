@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  MessageSquare, LayoutDashboard, Send, CheckCircle2, Volume2, VolumeX, RefreshCw, BellRing
+  MessageSquare, LayoutDashboard, Send, Volume2, VolumeX, RefreshCw, BellRing
 } from 'lucide-react';
-import { AppState, Message, Appointment, Transaction, SavingsGoal } from './types';
+import { AppState, Message, Appointment, Transaction, SavingsGoal, Habit, Task } from './types';
 import { getSecretaryResponse, generateSpeech } from './services/geminiService';
 import Dashboard from './components/Dashboard';
 
@@ -14,7 +14,7 @@ const App: React.FC = () => {
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
   
   const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem('secretary_state_v4');
+    const saved = localStorage.getItem('secretary_state_v5');
     if (saved) {
       const parsed = JSON.parse(saved);
       return {
@@ -26,16 +26,19 @@ const App: React.FC = () => {
       appointments: [],
       transactions: [],
       goals: [],
-      monthlyBudget: 0,
-      birthdays: [],
-      messages: [{ id: '1', role: 'model', text: 'Olá! Sou sua assistente premium. Posso organizar sua agenda com listas de compras inteligentes, gerenciar finanças ou tirar dúvidas. O que fazemos agora?', timestamp: new Date() }]
+      habits: [
+        { id: 'h1', name: 'Água', target: 2000, current: 0, unit: 'ml', lastUpdated: new Date().toISOString() },
+        { id: 'h2', name: 'Exercício', target: 60, current: 0, unit: 'min', lastUpdated: new Date().toISOString() }
+      ],
+      tasks: [],
+      messages: [{ id: '1', role: 'model', text: 'Olá! Sou sua assistente de alta performance. Vamos organizar suas finanças, sua saúde e suas tarefas hoje?', timestamp: new Date() }]
     };
   });
 
   const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
-    localStorage.setItem('secretary_state_v4', JSON.stringify(state));
+    localStorage.setItem('secretary_state_v5', JSON.stringify(state));
   }, [state]);
 
   const playAudio = async (base64: string) => {
@@ -67,36 +70,14 @@ const App: React.FC = () => {
     const handleTool = (name: string, args: any) => {
       setState(prev => {
         const newState = { ...prev };
-        if (name === 'add_appointment') {
-          newState.appointments = [...prev.appointments, { 
-            id: Math.random().toString(36).substr(2, 9), 
-            description: args.description, 
-            dateTime: args.dateTime, 
-            urgent: !!args.urgent, 
-            status: 'pending',
-            items: args.items || []
-          }];
+        if (name === 'add_task') {
+          newState.tasks = [...prev.tasks, { id: Math.random().toString(36).substr(2, 9), text: args.text, completed: false, priority: args.priority || 'medium' }];
+        } else if (name === 'update_habit') {
+          newState.habits = prev.habits.map(h => h.name.toLowerCase() === args.name.toLowerCase() ? { ...h, current: h.current + args.amount, lastUpdated: new Date().toISOString() } : h);
+        } else if (name === 'add_appointment') {
+          newState.appointments = [...prev.appointments, { id: Math.random().toString(36).substr(2, 9), description: args.description, dateTime: args.dateTime, urgent: !!args.urgent, status: 'pending', items: args.items || [] }];
         } else if (name === 'add_transaction') {
-          newState.transactions = [...prev.transactions, { 
-            id: Math.random().toString(36).substr(2, 9), 
-            amount: args.amount, 
-            type: args.type, 
-            category: args.category, 
-            date: new Date().toISOString(), 
-            description: args.description || '',
-            isRecurring: args.isRecurring,
-            frequency: args.frequency
-          }];
-        } else if (name === 'add_goal') {
-          newState.goals = [...prev.goals, {
-            id: Math.random().toString(36).substr(2, 9),
-            title: args.title,
-            targetAmount: args.targetAmount,
-            currentAmount: 0,
-            deadline: args.deadline
-          }];
-        } else if (name === 'update_goal_progress') {
-          newState.goals = prev.goals.map(g => g.id === args.goalId ? { ...g, currentAmount: g.currentAmount + args.amountToAdd } : g);
+          newState.transactions = [...prev.transactions, { id: Math.random().toString(36).substr(2, 9), amount: args.amount, type: args.type, category: args.category, date: new Date().toISOString(), description: args.description || '', isRecurring: args.isRecurring }];
         }
         return newState;
       });
@@ -125,8 +106,8 @@ const App: React.FC = () => {
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-full bg-emerald-700 flex items-center justify-center border-2 border-emerald-400 font-bold shadow-inner">SV</div>
             <div>
-              <h1 className="font-bold text-sm md:text-lg leading-tight">Secretária Premium</h1>
-              <p className="text-emerald-300 text-[10px] uppercase font-bold tracking-widest">Inteligência Organizacional</p>
+              <h1 className="font-bold text-sm md:text-lg leading-tight">Secretária Executiva</h1>
+              <p className="text-emerald-300 text-[10px] uppercase font-bold tracking-widest">Saúde, Foco & Gestão</p>
             </div>
           </div>
           <div className="flex space-x-2">
@@ -146,11 +127,11 @@ const App: React.FC = () => {
                   </div>
                 </div>
               ))}
-              {isTyping && <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-white/70 w-fit px-4 py-1.5 rounded-full animate-pulse shadow-sm">Organizando...</div>}
+              {isTyping && <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-white/70 w-fit px-4 py-1.5 rounded-full animate-pulse shadow-sm">Processando...</div>}
             </main>
             <footer className="bg-[#f0f2f5] p-4 flex border-t border-gray-200">
               <form className="flex-1 flex space-x-3" onSubmit={handleSendMessage}>
-                <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="Tente: 'Agende compra de bolo de chocolate'..." className="flex-1 p-3.5 px-6 rounded-full outline-none bg-white text-sm shadow-inner border border-gray-200 focus:border-emerald-400 transition-colors" />
+                <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="Agende, registre saúde ou finanças..." className="flex-1 p-3.5 px-6 rounded-full outline-none bg-white text-sm shadow-inner border border-gray-200 focus:border-emerald-400 transition-colors" />
                 <button type="submit" className="p-3.5 rounded-full bg-emerald-700 text-white shadow-lg hover:bg-emerald-800 active:scale-95 transition-all"><Send size={22} /></button>
               </form>
             </footer>
@@ -161,6 +142,7 @@ const App: React.FC = () => {
             onToggleStatus={(id) => setState(p => ({...p, appointments: p.appointments.map(a => a.id === id ? {...a, status: a.status === 'completed' ? 'pending' : 'completed'} : a)}))}
             onDeleteAppointment={(id) => setState(p => ({...p, appointments: p.appointments.filter(a => a.id !== id)}))}
             onDeleteExpense={(id) => setState(p => ({...p, transactions: p.transactions.filter(t => t.id !== id)}))}
+            onToggleTask={(id) => setState(p => ({...p, tasks: p.tasks.map(t => t.id === id ? {...t, completed: !t.completed} : t)}))}
           />
         )}
       </div>

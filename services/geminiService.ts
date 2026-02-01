@@ -2,52 +2,54 @@
 import { GoogleGenAI, Type, FunctionDeclaration, Modality } from "@google/genai";
 import { AppState } from "../types";
 
-const getApiKey = () => {
-  return process.env.API_KEY || '';
-};
+const getApiKey = () => process.env.API_KEY || '';
 
 const getSystemInstruction = (state: AppState) => {
   const now = new Date();
   const dateStr = now.toLocaleDateString('pt-BR');
   
-  const totalIncome = state.transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const totalExpense = state.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const savings = Math.max(0, totalIncome - totalExpense);
-  const healthScore = totalIncome > 0 ? Math.round((savings / totalIncome) * 100) : 0;
-  
   return `
-Você é uma Secretária Virtual Premium e Consultora de Conhecimento.
+Você é uma Secretária Virtual Premium e Life Coach de Alta Performance.
 CONTEXTO: Hoje é ${dateStr}.
 
-STATUS FINANCEIRO: Score ${healthScore}/100 | Saldo R$ ${savings.toFixed(2)}.
+MISSÃO DE COMPRAS INTELIGENTES:
+Ao agendar itens que envolvam mercado (receitas, limpeza, etc), você deve separar a "Quantidade da Receita" da "Embalagem de Mercado".
+Use o bom senso comercial brasileiro:
+- Óleo: Mínimo 900ml.
+- Farinha/Açúcar/Arroz: Mínimo 1kg.
+- Leite: Mínimo 1L.
+- Ovos: Mínimo 6 ou 12 unidades.
+- Manteiga: 200g ou 500g.
 
-Suas Diretrizes de Resposta:
-1. TRATAMENTO: Jamais use "Senhor" ou "Senhora". Seja direta, moderna e profissional.
-2. CONHECIMENTO GERAL: Você pode tirar dúvidas sobre qualquer assunto de forma resumida (máximo 3 tópicos).
-3. LISTAS INTELIGENTES: Sempre que o usuário pedir para agendar algo que envolva compras ou ingredientes (ex: "comprar itens para bolo"), use a ferramenta 'add_appointment' e preencha o campo 'items' com a lista detalhada de ingredientes e quantidades sugeridas. Seja proativa em sugerir as quantidades corretas para receitas comuns.
-4. FINANÇAS: Proatividade em gastos recorrentes e metas de poupança.
+No campo 'items':
+- 'quantity': O que o usuário vai usar (ex: 250g).
+- 'marketQuantity': O que ele deve comprar (ex: 1kg).
+
+DIRETRIZES GERAIS:
+- Seja direta e executiva.
+- Gerencie saúde (hábitos), tarefas (to-do) e finanças proativamente.
 `;
 };
 
 const tools: FunctionDeclaration[] = [
   {
     name: 'add_appointment',
-    description: 'Adiciona compromisso à agenda, opcionalmente com uma lista de itens (ex: lista de compras).',
+    description: 'Adiciona compromisso com lista de compras inteligente separando uso de compra.',
     parameters: {
       type: Type.OBJECT,
       properties: {
         description: { type: Type.STRING },
-        dateTime: { type: Type.STRING, description: 'ISO 8601' },
-        urgent: { type: Type.BOOLEAN },
+        dateTime: { type: Type.STRING },
         items: {
           type: Type.ARRAY,
           items: {
             type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              quantity: { type: Type.STRING }
+            properties: { 
+              name: { type: Type.STRING }, 
+              quantity: { type: Type.STRING, description: 'Qtd da receita/uso' },
+              marketQuantity: { type: Type.STRING, description: 'Tamanho da embalagem no mercado' }
             },
-            required: ['name', 'quantity']
+            required: ['name', 'quantity', 'marketQuantity']
           }
         }
       },
@@ -55,44 +57,30 @@ const tools: FunctionDeclaration[] = [
     }
   },
   {
+    name: 'add_task',
+    description: 'Adiciona tarefa ao To-Do.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: { text: { type: Type.STRING }, priority: { type: Type.STRING, enum: ['low', 'medium', 'high'] } },
+      required: ['text']
+    }
+  },
+  {
+    name: 'update_habit',
+    description: 'Atualiza progresso de saúde.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: { name: { type: Type.STRING }, amount: { type: Type.NUMBER } },
+      required: ['name', 'amount']
+    }
+  },
+  {
     name: 'add_transaction',
-    description: 'Registra uma entrada ou saída financeira.',
+    description: 'Registra finanças.',
     parameters: {
       type: Type.OBJECT,
-      properties: {
-        amount: { type: Type.NUMBER },
-        type: { type: Type.STRING, enum: ['income', 'expense'] },
-        category: { type: Type.STRING },
-        description: { type: Type.STRING },
-        isRecurring: { type: Type.BOOLEAN },
-        frequency: { type: Type.STRING, enum: ['monthly', 'weekly'] }
-      },
+      properties: { amount: { type: Type.NUMBER }, type: { type: Type.STRING, enum: ['income', 'expense'] }, category: { type: Type.STRING } },
       required: ['amount', 'type', 'category']
-    }
-  },
-  {
-    name: 'add_goal',
-    description: 'Cria uma meta de poupança.',
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        title: { type: Type.STRING },
-        targetAmount: { type: Type.NUMBER },
-        deadline: { type: Type.STRING }
-      },
-      required: ['title', 'targetAmount']
-    }
-  },
-  {
-    name: 'update_goal_progress',
-    description: 'Adiciona dinheiro a uma meta.',
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        goalId: { type: Type.STRING },
-        amountToAdd: { type: Type.NUMBER }
-      },
-      required: ['goalId', 'amountToAdd']
     }
   }
 ];
@@ -102,10 +90,8 @@ export const getSecretaryResponse = async (
   state: AppState,
   onToolCall: (name: string, args: any) => void
 ): Promise<string> => {
-  const apiKey = getApiKey();
-  const ai = new GoogleGenAI({ apiKey });
-
-  const history = state.messages.slice(-4).map(m => ({
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
+  const history = state.messages.slice(-6).map(m => ({
     role: m.role === 'user' ? 'user' : 'model',
     parts: [{ text: m.text }]
   }));
@@ -123,17 +109,15 @@ export const getSecretaryResponse = async (
     if (response.functionCalls) {
       for (const fc of response.functionCalls) onToolCall(fc.name, fc.args);
     }
-    return response.text || "Entendido. Agenda atualizada.";
+    return response.text || "Pronto. Agenda atualizada com lista de mercado.";
   } catch (error) {
-    return "Houve um erro na minha conexão. Pode repetir?";
+    return "Tive um problema na rede, mas pode tentar novamente?";
   }
 };
 
 export const generateSpeech = async (text: string): Promise<string | null> => {
-  const apiKey = getApiKey();
-  if (!apiKey) return null;
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: text }] }],

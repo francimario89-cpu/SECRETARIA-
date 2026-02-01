@@ -5,7 +5,23 @@ export interface Appointment {
   dateTime: string;
   urgent: boolean;
   status: 'pending' | 'completed';
-  items?: { name: string; quantity: string }[];
+  items?: { name: string; quantity: string; marketQuantity?: string }[];
+}
+
+export interface Habit {
+  id: string;
+  name: string;
+  target: number;
+  current: number;
+  unit: string;
+  lastUpdated: string;
+}
+
+export interface Task {
+  id: string;
+  text: string;
+  completed: boolean;
+  priority: 'low' | 'medium' | 'high';
 }
 
 export interface Transaction {
@@ -27,13 +43,6 @@ export interface SavingsGoal {
   deadline?: string;
 }
 
-export interface Birthday {
-  id: string;
-  name: string;
-  date: string;
-  relation: string;
-}
-
 export interface Message {
   id: string;
   role: 'user' | 'model';
@@ -45,7 +54,7 @@ export interface AppState {
   appointments: Appointment[];
   transactions: Transaction[];
   goals: SavingsGoal[];
-  monthlyBudget: number;
-  birthdays: Birthday[];
+  habits: Habit[];
+  tasks: Task[];
   messages: Message[];
 }
