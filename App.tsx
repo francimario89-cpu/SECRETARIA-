@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   MessageSquare, 
@@ -9,7 +8,7 @@ import {
   VolumeX,
   RefreshCw
 } from 'lucide-react';
-import { AppState, Message, Appointment, Expense, Birthday } from './types';
+import { AppState, Message, Appointment, Expense } from './types';
 import { getSecretaryResponse, generateSpeech } from './services/geminiService';
 import Dashboard from './components/Dashboard';
 
@@ -35,7 +34,8 @@ const App: React.FC = () => {
         };
       }
     } catch (e) {
-      console.error("Erro ao carregar estado salvo:", e);
+      console.warn("Limpando cache devido a erro de formato:", e);
+      localStorage.removeItem('secretary_state');
     }
     
     return {
@@ -46,7 +46,7 @@ const App: React.FC = () => {
         {
           id: 'initial',
           role: 'model',
-          text: 'Bom dia, Senhor. Estou pronta para gerenciar sua rotina. Como posso ser útil?',
+          text: 'Bom dia, Senhor. Sou sua nova Secretária Virtual. Como posso ajudá-lo hoje?',
           timestamp: new Date()
         }
       ]
@@ -93,7 +93,7 @@ const App: React.FC = () => {
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || isTyping) return;
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -153,23 +153,23 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden flex-col md:flex-row">
-      {/* Sidebar */}
+      {/* Sidebar - Fixa na lateral no PC, no rodapé no Mobile */}
       <div className="w-full md:w-20 bg-emerald-950 flex md:flex-col items-center justify-around md:justify-start md:py-6 md:space-y-8 shadow-2xl z-20 order-2 md:order-1 h-16 md:h-full">
         <button 
           onClick={() => setActiveTab('chat')}
-          className={`p-3 rounded-xl transition-all ${activeTab === 'chat' ? 'bg-white/20 text-white' : 'text-emerald-200'}`}
+          className={`p-3 rounded-xl transition-all ${activeTab === 'chat' ? 'bg-white/20 text-white' : 'text-emerald-200 hover:text-white'}`}
         >
           <MessageSquare size={24} />
         </button>
         <button 
           onClick={() => setActiveTab('dashboard')}
-          className={`p-3 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-white/20 text-white' : 'text-emerald-200'}`}
+          className={`p-3 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-white/20 text-white' : 'text-emerald-200 hover:text-white'}`}
         >
           <LayoutDashboard size={24} />
         </button>
         <button 
           onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
-          className={`p-3 rounded-xl transition-all ${isVoiceEnabled ? 'bg-emerald-500 text-white' : 'text-emerald-200'}`}
+          className={`p-3 rounded-xl transition-all ${isVoiceEnabled ? 'bg-emerald-500 text-white' : 'text-emerald-200 hover:text-white'}`}
           title={isVoiceEnabled ? "Voz Ativada" : "Voz Desativada"}
         >
           {isVoiceEnabled ? <Volume2 size={24} /> : <VolumeX size={24} />}
@@ -180,20 +180,22 @@ const App: React.FC = () => {
       <div className="flex-1 flex flex-col relative overflow-hidden order-1 md:order-2">
         <header className="bg-emerald-800 text-white p-4 shadow-lg flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <img src="https://picsum.photos/seed/secretary/100/100" className="w-10 h-10 rounded-full border-2 border-emerald-400" alt="S" />
+            <div className="w-10 h-10 rounded-full bg-emerald-700 flex items-center justify-center border-2 border-emerald-400 font-bold">SV</div>
             <div>
               <h1 className="font-bold text-sm md:text-lg">Secretária Virtual</h1>
-              <p className="text-emerald-200 text-[10px] uppercase font-bold tracking-tighter">Online agora</p>
+              <p className="text-emerald-200 text-[10px] uppercase font-bold tracking-tighter">Pronta para servir</p>
             </div>
           </div>
-          <button onClick={() => window.location.reload()} className="text-emerald-300 transition-transform active:rotate-180"><RefreshCw size={18} /></button>
+          <button onClick={() => window.location.reload()} className="p-2 text-emerald-300 hover:text-white transition-colors">
+            <RefreshCw size={18} />
+          </button>
         </header>
 
         {activeTab === 'chat' ? (
           <>
             <main className="flex-1 overflow-y-auto whatsapp-bg p-4 space-y-4">
               {state.messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
                   <div className={`max-w-[85%] p-3 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-[#dcf8c6] rounded-tr-none' : 'bg-white rounded-tl-none'}`}>
                     <p className="text-gray-800 text-sm md:text-base whitespace-pre-wrap">{msg.text}</p>
                     <div className="flex justify-end items-center mt-1 space-x-1">
@@ -205,7 +207,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
               ))}
-              {isTyping && <div className="text-xs text-emerald-800 bg-white/50 w-fit px-2 py-1 rounded-full animate-pulse">Digitando...</div>}
+              {isTyping && <div className="text-xs text-emerald-800 bg-white/70 backdrop-blur w-fit px-3 py-1 rounded-full animate-pulse font-medium shadow-sm">Secretária está processando...</div>}
               <div ref={chatEndRef} />
             </main>
 
@@ -215,10 +217,14 @@ const App: React.FC = () => {
                   type="text" 
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Diga algo para mim..."
-                  className="flex-1 p-3 px-5 rounded-full outline-none shadow-inner text-sm bg-white"
+                  placeholder="Instrua sua secretária..."
+                  className="flex-1 p-3 px-5 rounded-full outline-none shadow-sm text-sm bg-white focus:ring-2 focus:ring-emerald-500"
                 />
-                <button type="submit" className="p-3 bg-emerald-700 text-white rounded-full transition-transform active:scale-90 shadow-md">
+                <button 
+                  type="submit" 
+                  disabled={!inputText.trim() || isTyping}
+                  className={`p-3 rounded-full transition-all shadow-md ${!inputText.trim() || isTyping ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-700 hover:bg-emerald-800 text-white active:scale-95'}`}
+                >
                   <Send size={20} />
                 </button>
               </form>
