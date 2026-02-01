@@ -1,0 +1,7 @@
+{
+  "name": "Secretária Virtual Inteligente",
+  "description": "Uma secretária virtual proativa baseada em IA para gerenciar agenda, finanças e bem-estar via interface estilo WhatsApp.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
