@@ -14,6 +14,16 @@ export interface Transaction {
   category: string;
   date: string;
   description: string;
+  isRecurring?: boolean;
+  frequency?: 'monthly' | 'weekly';
+}
+
+export interface SavingsGoal {
+  id: string;
+  title: string;
+  targetAmount: number;
+  currentAmount: number;
+  deadline?: string;
 }
 
 export interface Birthday {
@@ -33,6 +43,7 @@ export interface Message {
 export interface AppState {
   appointments: Appointment[];
   transactions: Transaction[];
+  goals: SavingsGoal[];
   monthlyBudget: number;
   birthdays: Birthday[];
   messages: Message[];

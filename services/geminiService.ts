@@ -9,75 +9,91 @@ const getApiKey = () => {
 const getSystemInstruction = (state: AppState) => {
   const now = new Date();
   const dateStr = now.toLocaleDateString('pt-BR');
-  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   
   const totalIncome = state.transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = state.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const budget = state.monthlyBudget || 0;
-  const remainingBudget = budget - totalExpense;
+  const savings = Math.max(0, totalIncome - totalExpense);
+  const healthScore = totalIncome > 0 ? Math.round((savings / totalIncome) * 100) : 0;
+  
+  const goalsInfo = state.goals.map(g => `- ${g.title}: R$ ${g.currentAmount}/${g.targetAmount}`).join('\n');
 
   return `
-Você é uma Secretária Virtual e Consultora Financeira Proativa.
-CONTEXTO ATUAL: Hoje é ${dateStr}, agora são ${timeStr}.
+Você é uma Secretária Virtual e Consultora Financeira Avançada (Nível Guiabolso/Mobills).
+CONTEXTO: Hoje é ${dateStr}.
 
-RESUMO FINANCEIRO:
+STATUS FINANCEIRO ATUAL:
+- Score de Saúde: ${healthScore}/100
 - Entradas: R$ ${totalIncome.toFixed(2)}
 - Saídas: R$ ${totalExpense.toFixed(2)}
-- Orçamento (Teto): R$ ${budget.toFixed(2)}
-- Disponível para gastos: R$ ${remainingBudget.toFixed(2)}
+- Metas Ativas:
+${goalsInfo || "Nenhuma meta definida."}
 
-Regras de Atuação:
-1. TRATAMENTO: Profissional, direto, sem usar "Senhor/Senhora".
-2. CONSULTORIA: Se o usuário estiver perto de gastar mais de 80% do orçamento, dê um aviso amigável.
-3. FERRAMENTAS:
-   - 'add_transaction': Use para ENTRADAS (income) e SAÍDAS (expense).
-   - 'set_budget': Define o limite de gastos mensal.
-   - 'add_appointment': Datas em ISO 8601.
-4. PROATIVIDADE: Se o usuário perguntar "quanto posso gastar", use os dados financeiros acima.
+Suas Novas Capacidades:
+1. SCORE DE SAÚDE: Se o score for < 30, seja mais cautelosa e sugira cortes. Se > 60, parabenize pela disciplina.
+2. RECORRÊNCIA: Quando o usuário disser "todo mês pago X", use 'add_transaction' com 'isRecurring: true'.
+3. METAS: Use 'add_goal' para criar objetivos (ex: viagem, carro). Ajude o usuário a destinar o saldo positivo para essas metas.
+4. PROATIVIDADE: Analise se o saldo sobra e pergunte se quer aplicar em uma meta.
 
-Exemplos:
-- "Registrado. Você ainda tem R$ ${remainingBudget} para gastar este mês."
-- "Orçamento de R$ ${budget} definido. Vou te avisar se chegar perto do limite."
+Regras de Resposta:
+- Não use "Senhor/Senhora".
+- Seja motivadora mas realista.
+- Se o usuário registrar um gasto fixo (Aluguel, Netflix), pergunte se é recorrente.
 `;
 };
 
 const tools: FunctionDeclaration[] = [
   {
-    name: 'add_appointment',
-    description: 'Adiciona um compromisso à agenda.',
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        description: { type: Type.STRING },
-        dateTime: { type: Type.STRING, description: 'ISO 8601' },
-        urgent: { type: Type.BOOLEAN }
-      },
-      required: ['description', 'dateTime']
-    }
-  },
-  {
     name: 'add_transaction',
-    description: 'Registra uma entrada (salário/lucro) ou saída (gasto).',
+    description: 'Registra uma entrada ou saída, podendo ser recorrente.',
     parameters: {
       type: Type.OBJECT,
       properties: {
         amount: { type: Type.NUMBER },
         type: { type: Type.STRING, enum: ['income', 'expense'] },
         category: { type: Type.STRING },
-        description: { type: Type.STRING }
+        description: { type: Type.STRING },
+        isRecurring: { type: Type.BOOLEAN },
+        frequency: { type: Type.STRING, enum: ['monthly', 'weekly'] }
       },
       required: ['amount', 'type', 'category']
     }
   },
   {
-    name: 'set_budget',
-    description: 'Define o teto de gastos mensal do usuário.',
+    name: 'add_goal',
+    description: 'Cria uma meta de poupança.',
     parameters: {
       type: Type.OBJECT,
       properties: {
-        amount: { type: Type.NUMBER }
+        title: { type: Type.STRING },
+        targetAmount: { type: Type.NUMBER },
+        deadline: { type: Type.STRING }
       },
-      required: ['amount']
+      required: ['title', 'targetAmount']
+    }
+  },
+  {
+    name: 'update_goal_progress',
+    description: 'Adiciona dinheiro a uma meta existente.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        goalId: { type: Type.STRING },
+        amountToAdd: { type: Type.NUMBER }
+      },
+      required: ['goalId', 'amountToAdd']
+    }
+  },
+  {
+    name: 'add_appointment',
+    description: 'Adiciona compromisso à agenda.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        description: { type: Type.STRING },
+        dateTime: { type: Type.STRING },
+        urgent: { type: Type.BOOLEAN }
+      },
+      required: ['description', 'dateTime']
     }
   }
 ];
@@ -105,7 +121,7 @@ export const getSecretaryResponse = async (
     }
     return response.text || "Entendido.";
   } catch (error) {
-    return "Tive um problema. Pode repetir?";
+    return "Tive um problema técnico. Pode repetir?";
   }
 };
 
