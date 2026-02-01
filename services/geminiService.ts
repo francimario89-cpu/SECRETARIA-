@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, FunctionDeclaration, Modality } from "@google/genai";
 import { AppState } from "../types";
 
@@ -5,58 +6,78 @@ const getApiKey = () => {
   return process.env.API_KEY || '';
 };
 
-const getSystemInstruction = () => {
+const getSystemInstruction = (state: AppState) => {
   const now = new Date();
   const dateStr = now.toLocaleDateString('pt-BR');
   const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  const dayOfWeek = now.toLocaleDateString('pt-BR', { weekday: 'long' });
+  
+  const totalIncome = state.transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const totalExpense = state.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const budget = state.monthlyBudget || 0;
+  const remainingBudget = budget - totalExpense;
 
   return `
-Você é uma Secretária Virtual de alto nível, extremamente organizada, direta e eficiente.
-CONTEXTO ATUAL: Hoje é ${dayOfWeek}, dia ${dateStr}, agora são ${timeStr}.
+Você é uma Secretária Virtual e Consultora Financeira Proativa.
+CONTEXTO ATUAL: Hoje é ${dateStr}, agora são ${timeStr}.
 
-Regras de Comunicação:
-1. TRATAMENTO: NÃO use "Senhor" ou "Senhora". Use um tom profissional, porém direto e moderno.
-2. VOCABULÁRIO: Use um vocabulário amplo e natural. Varie as confirmações para não ser repetitiva: "Providenciado", "Agendado", "Registrado", "Tudo pronto", "Lançamento feito", "Anotado", "Combinado".
-3. CONCISÃO: Seja extremamente resumida. Respostas curtas são preferíveis.
-4. FERRAMENTAS (REGRAS CRÍTICAS): 
-   - Ao usar 'add_appointment', converta datas relativas (ex: "dia 15", "amanhã", "15 de fevereiro") para o formato ISO 8601 COMPLETO (YYYY-MM-DDTHH:mm). 
-   - Se o usuário mencionar um mês que já passou no ano corrente, agende para o próximo ano.
-   - SEMPRE acione a ferramenta necessária antes de responder ao usuário.
+RESUMO FINANCEIRO:
+- Entradas: R$ ${totalIncome.toFixed(2)}
+- Saídas: R$ ${totalExpense.toFixed(2)}
+- Orçamento (Teto): R$ ${budget.toFixed(2)}
+- Disponível para gastos: R$ ${remainingBudget.toFixed(2)}
 
-Exemplos de Resposta:
-- "Compromisso agendado para fevereiro."
-- "Gasto registrado com sucesso. Mais algo?"
-- "Lembrete anotado. Tudo certo por aqui."
-- "Agendamento concluído."
+Regras de Atuação:
+1. TRATAMENTO: Profissional, direto, sem usar "Senhor/Senhora".
+2. CONSULTORIA: Se o usuário estiver perto de gastar mais de 80% do orçamento, dê um aviso amigável.
+3. FERRAMENTAS:
+   - 'add_transaction': Use para ENTRADAS (income) e SAÍDAS (expense).
+   - 'set_budget': Define o limite de gastos mensal.
+   - 'add_appointment': Datas em ISO 8601.
+4. PROATIVIDADE: Se o usuário perguntar "quanto posso gastar", use os dados financeiros acima.
+
+Exemplos:
+- "Registrado. Você ainda tem R$ ${remainingBudget} para gastar este mês."
+- "Orçamento de R$ ${budget} definido. Vou te avisar se chegar perto do limite."
 `;
 };
 
 const tools: FunctionDeclaration[] = [
   {
     name: 'add_appointment',
-    description: 'Adiciona um compromisso ou lembrete à agenda com data precisa.',
+    description: 'Adiciona um compromisso à agenda.',
     parameters: {
       type: Type.OBJECT,
       properties: {
-        description: { type: Type.STRING, description: 'O que deve ser lembrado.' },
-        dateTime: { type: Type.STRING, description: 'Data em formato ISO (YYYY-MM-DDTHH:mm).' },
-        urgent: { type: Type.BOOLEAN, description: 'Prioridade alta.' }
+        description: { type: Type.STRING },
+        dateTime: { type: Type.STRING, description: 'ISO 8601' },
+        urgent: { type: Type.BOOLEAN }
       },
       required: ['description', 'dateTime']
     }
   },
   {
-    name: 'add_expense',
-    description: 'Registra uma despesa financeira.',
+    name: 'add_transaction',
+    description: 'Registra uma entrada (salário/lucro) ou saída (gasto).',
     parameters: {
       type: Type.OBJECT,
       properties: {
-        amount: { type: Type.NUMBER, description: 'Valor numérico.' },
-        category: { type: Type.STRING, description: 'Categoria do gasto (Mercado, Saúde, etc).' },
-        description: { type: Type.STRING, description: 'Detalhes do gasto.' }
+        amount: { type: Type.NUMBER },
+        type: { type: Type.STRING, enum: ['income', 'expense'] },
+        category: { type: Type.STRING },
+        description: { type: Type.STRING }
       },
-      required: ['amount', 'category']
+      required: ['amount', 'type', 'category']
+    }
+  },
+  {
+    name: 'set_budget',
+    description: 'Define o teto de gastos mensal do usuário.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        amount: { type: Type.NUMBER }
+      },
+      required: ['amount']
     }
   }
 ];
@@ -67,47 +88,24 @@ export const getSecretaryResponse = async (
   onToolCall: (name: string, args: any) => void
 ): Promise<string> => {
   const apiKey = getApiKey();
-  if (!apiKey || !apiKey.startsWith("AIza")) return "Erro: Chave de API inválida no servidor.";
-  
   const ai = new GoogleGenAI({ apiKey });
-
-  const history: any[] = [];
-  const validMessages = state.messages.filter(m => 
-    m.id !== 'initial' && !m.text.includes("Atenção:") && !m.text.includes("Erro:")
-  ).slice(-6);
-
-  let lastRole = '';
-  for (const m of validMessages) {
-    const role = m.role === 'user' ? 'user' : 'model';
-    if (role !== lastRole) {
-      history.push({ role, parts: [{ text: m.text }] });
-      lastRole = role;
-    }
-  }
-
-  if (history.length > 0 && history[0].role === 'model') history.shift();
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [...history, { role: 'user', parts: [{ text: userInput }] }],
+      contents: [{ role: 'user', parts: [{ text: userInput }] }],
       config: {
-        systemInstruction: getSystemInstruction(),
+        systemInstruction: getSystemInstruction(state),
         tools: [{ functionDeclarations: tools }],
-        temperature: 0.7
       }
     });
 
     if (response.functionCalls) {
-      for (const fc of response.functionCalls) {
-        onToolCall(fc.name, fc.args);
-      }
+      for (const fc of response.functionCalls) onToolCall(fc.name, fc.args);
     }
-
-    return response.text || "Providenciado.";
-  } catch (error: any) {
-    console.error("Erro Gemini:", error);
-    return "Tive um problema de conexão. Poderia repetir?";
+    return response.text || "Entendido.";
+  } catch (error) {
+    return "Tive um problema. Pode repetir?";
   }
 };
 
@@ -125,7 +123,5 @@ export const generateSpeech = async (text: string): Promise<string | null> => {
       }
     });
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
-  } catch (e) {
-    return null;
-  }
+  } catch (e) { return null; }
 };

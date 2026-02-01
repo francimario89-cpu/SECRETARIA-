@@ -7,9 +7,10 @@ export interface Appointment {
   status: 'pending' | 'completed';
 }
 
-export interface Expense {
+export interface Transaction {
   id: string;
   amount: number;
+  type: 'income' | 'expense';
   category: string;
   date: string;
   description: string;
@@ -31,7 +32,8 @@ export interface Message {
 
 export interface AppState {
   appointments: Appointment[];
-  expenses: Expense[];
+  transactions: Transaction[];
+  monthlyBudget: number;
   birthdays: Birthday[];
   messages: Message[];
 }
