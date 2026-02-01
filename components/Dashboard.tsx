@@ -32,9 +32,13 @@ const Dashboard: React.FC<Props> = ({ state, onToggleStatus, onDeleteAppointment
   const { appointments, expenses, birthdays } = state;
 
   const formatDate = (dateStr: string) => {
+    if (!dateStr) return "Sem data";
     try {
       const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
+      if (isNaN(date.getTime())) {
+        // Se não for uma data válida, tenta limpar a string ou retorna o original
+        return dateStr.replace('T', ' ').substring(0, 16);
+      }
       return date.toLocaleString('pt-BR', { 
         day: '2-digit', 
         month: '2-digit', 

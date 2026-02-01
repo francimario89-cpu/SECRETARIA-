@@ -12,21 +12,23 @@ const getSystemInstruction = () => {
   const dayOfWeek = now.toLocaleDateString('pt-BR', { weekday: 'long' });
 
   return `
-Você é uma Secretária Virtual de alto nível, extremamente organizada, direta e educada.
+Você é uma Secretária Virtual de alto nível, extremamente organizada, direta e eficiente.
 CONTEXTO ATUAL: Hoje é ${dayOfWeek}, dia ${dateStr}, agora são ${timeStr}.
 
 Regras de Comunicação:
-1. TRATAMENTO: Utilize sempre "Senhor" ou "Senhora".
-2. VOCABULÁRIO: Seja variada e natural. Use termos como "Agendado", "Tudo pronto", "Registrado", "Lançamento feito", "Anotado". Evite repetições mecânicas.
-3. CONCISÃO: Respostas curtíssimas e eficientes.
-4. FERRAMENTAS (CRITICAL): 
-   - Ao usar 'add_appointment', converta datas relativas (ex: "dia 15", "amanhã", "próxima segunda") para o formato ISO 8601 (YYYY-MM-DDTHH:mm). Se o usuário não disser o ano, assuma o próximo dia 15 disponível (se hoje é maio, e ele diz feveveiro, é para o ano que vem).
-   - Ao usar 'add_expense', registre o valor exato.
+1. TRATAMENTO: NÃO use "Senhor" ou "Senhora". Use um tom profissional, porém direto e moderno.
+2. VOCABULÁRIO: Use um vocabulário amplo e natural. Varie as confirmações para não ser repetitiva: "Providenciado", "Agendado", "Registrado", "Tudo pronto", "Lançamento feito", "Anotado", "Combinado".
+3. CONCISÃO: Seja extremamente resumida. Respostas curtas são preferíveis.
+4. FERRAMENTAS (REGRAS CRÍTICAS): 
+   - Ao usar 'add_appointment', converta datas relativas (ex: "dia 15", "amanhã", "15 de fevereiro") para o formato ISO 8601 COMPLETO (YYYY-MM-DDTHH:mm). 
+   - Se o usuário mencionar um mês que já passou no ano corrente, agende para o próximo ano.
+   - SEMPRE acione a ferramenta necessária antes de responder ao usuário.
 
-Exemplos de Confirmação:
-- "Compromisso para fevereiro agendado, Senhor."
-- "Gasto lançado. Mais algo?"
-- "Lembrete anotado. Tudo certo."
+Exemplos de Resposta:
+- "Compromisso agendado para fevereiro."
+- "Gasto registrado com sucesso. Mais algo?"
+- "Lembrete anotado. Tudo certo por aqui."
+- "Agendamento concluído."
 `;
 };
 
@@ -51,7 +53,7 @@ const tools: FunctionDeclaration[] = [
       type: Type.OBJECT,
       properties: {
         amount: { type: Type.NUMBER, description: 'Valor numérico.' },
-        category: { type: Type.STRING, description: 'Categoria do gasto.' },
+        category: { type: Type.STRING, description: 'Categoria do gasto (Mercado, Saúde, etc).' },
         description: { type: Type.STRING, description: 'Detalhes do gasto.' }
       },
       required: ['amount', 'category']
@@ -65,7 +67,7 @@ export const getSecretaryResponse = async (
   onToolCall: (name: string, args: any) => void
 ): Promise<string> => {
   const apiKey = getApiKey();
-  if (!apiKey || !apiKey.startsWith("AIza")) return "Erro: API Key inválida.";
+  if (!apiKey || !apiKey.startsWith("AIza")) return "Erro: Chave de API inválida no servidor.";
   
   const ai = new GoogleGenAI({ apiKey });
 
@@ -102,10 +104,10 @@ export const getSecretaryResponse = async (
       }
     }
 
-    return response.text || "Providenciado, Senhor.";
+    return response.text || "Providenciado.";
   } catch (error: any) {
-    console.error(error);
-    return "Tive um problema técnico, Senhor. Poderia repetir?";
+    console.error("Erro Gemini:", error);
+    return "Tive um problema de conexão. Poderia repetir?";
   }
 };
 

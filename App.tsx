@@ -46,7 +46,7 @@ const App: React.FC = () => {
         {
           id: 'initial',
           role: 'model',
-          text: 'Bom dia, Senhor. Sou sua nova Secretária Virtual. Como posso ajudá-lo hoje?',
+          text: 'Bom dia. Sou sua nova Secretária Virtual. Como posso ajudar hoje?',
           timestamp: new Date()
         }
       ]
