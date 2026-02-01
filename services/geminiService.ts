@@ -12,29 +12,41 @@ const getSystemInstruction = (state: AppState) => {
 Você é uma Secretária Virtual Premium e Life Coach de Alta Performance.
 CONTEXTO: Hoje é ${dateStr}.
 
-MISSÃO DE COMPRAS INTELIGENTES:
-Ao agendar itens que envolvam mercado (receitas, limpeza, etc), você deve separar a "Quantidade da Receita" da "Embalagem de Mercado".
-Use o bom senso comercial brasileiro:
-- Óleo: Mínimo 900ml.
-- Farinha/Açúcar/Arroz: Mínimo 1kg.
-- Leite: Mínimo 1L.
-- Ovos: Mínimo 6 ou 12 unidades.
-- Manteiga: 200g ou 500g.
+IMPORTANTE PARA FINANÇAS:
+Ao receber valores monetários (ex: "6.680,00"), converta sempre para o formato numérico padrão (ex: 6680.00) antes de chamar a ferramenta 'add_transaction'. Ignore pontos de milhar e trate a vírgula como ponto decimal.
 
-No campo 'items':
-- 'quantity': O que o usuário vai usar (ex: 250g).
-- 'marketQuantity': O que ele deve comprar (ex: 1kg).
+MISSÃO DE COMPRAS INTELIGENTES:
+Ao agendar itens que envolvam mercado (receitas, limpeza, etc), separe a "Quantidade da Receita" da "Embalagem de Mercado".
+- Óleo: 900ml.
+- Farinha/Açúcar/Arroz: 1kg.
+- Leite: 1L.
+- Ovos: 6 ou 12 un.
 
 DIRETRIZES GERAIS:
-- Seja direta e executiva.
-- Gerencie saúde (hábitos), tarefas (to-do) e finanças proativamente.
+- Seja direta, executiva e proativa.
+- Se o usuário pedir para "colocar que recebi", use 'add_transaction' com type='income'.
+- Se o usuário pedir para "gastei" ou "paguei", use 'add_transaction' com type='expense'.
 `;
 };
 
 const tools: FunctionDeclaration[] = [
   {
+    name: 'add_transaction',
+    description: 'Registra uma entrada (income) ou saída (expense) financeira. Converta formatos como 1.500,00 para 1500.00.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: { 
+        amount: { type: Type.NUMBER, description: 'Valor numérico decimal' }, 
+        type: { type: Type.STRING, enum: ['income', 'expense'] }, 
+        category: { type: Type.STRING, description: 'Ex: Salário, Alimentação, Aluguel' },
+        description: { type: Type.STRING }
+      },
+      required: ['amount', 'type', 'category']
+    }
+  },
+  {
     name: 'add_appointment',
-    description: 'Adiciona compromisso com lista de compras inteligente separando uso de compra.',
+    description: 'Adiciona compromisso com lista de compras inteligente.',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -46,8 +58,8 @@ const tools: FunctionDeclaration[] = [
             type: Type.OBJECT,
             properties: { 
               name: { type: Type.STRING }, 
-              quantity: { type: Type.STRING, description: 'Qtd da receita/uso' },
-              marketQuantity: { type: Type.STRING, description: 'Tamanho da embalagem no mercado' }
+              quantity: { type: Type.STRING },
+              marketQuantity: { type: Type.STRING }
             },
             required: ['name', 'quantity', 'marketQuantity']
           }
@@ -73,15 +85,6 @@ const tools: FunctionDeclaration[] = [
       properties: { name: { type: Type.STRING }, amount: { type: Type.NUMBER } },
       required: ['name', 'amount']
     }
-  },
-  {
-    name: 'add_transaction',
-    description: 'Registra finanças.',
-    parameters: {
-      type: Type.OBJECT,
-      properties: { amount: { type: Type.NUMBER }, type: { type: Type.STRING, enum: ['income', 'expense'] }, category: { type: Type.STRING } },
-      required: ['amount', 'type', 'category']
-    }
   }
 ];
 
@@ -90,11 +93,19 @@ export const getSecretaryResponse = async (
   state: AppState,
   onToolCall: (name: string, args: any) => void
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: getApiKey() });
-  const history = state.messages.slice(-6).map(m => ({
-    role: m.role === 'user' ? 'user' : 'model',
-    parts: [{ text: m.text }]
-  }));
+  const apiKey = getApiKey();
+  if (!apiKey) return "Erro: Chave de API não configurada.";
+
+  const ai = new GoogleGenAI({ apiKey });
+  
+  // Garante que o histórico seja alternado e não comece com mensagem vazia
+  const history = state.messages
+    .filter(m => m.text && m.text.trim() !== "")
+    .slice(-8)
+    .map(m => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.text }]
+    }));
 
   try {
     const response = await ai.models.generateContent({
@@ -103,15 +114,24 @@ export const getSecretaryResponse = async (
       config: {
         systemInstruction: getSystemInstruction(state),
         tools: [{ functionDeclarations: tools }],
+        temperature: 0.7,
       }
     });
 
     if (response.functionCalls) {
-      for (const fc of response.functionCalls) onToolCall(fc.name, fc.args);
+      for (const fc of response.functionCalls) {
+        console.log(`[Tool Call] ${fc.name}:`, fc.args);
+        onToolCall(fc.name, fc.args);
+      }
     }
-    return response.text || "Pronto. Agenda atualizada com lista de mercado.";
-  } catch (error) {
-    return "Tive um problema na rede, mas pode tentar novamente?";
+    
+    return response.text || "Comando processado com sucesso.";
+  } catch (error: any) {
+    console.error("Gemini API Error:", error);
+    if (error.message?.includes("SAFE")) {
+      return "Esta mensagem foi filtrada por segurança. Pode tentar reformular?";
+    }
+    return "Tive um problema de conexão com a inteligência central. Pode repetir sua solicitação?";
   }
 };
 
