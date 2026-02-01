@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, FunctionDeclaration, Modality } from "@google/genai";
 import { AppState } from "../types";
 
@@ -10,7 +9,7 @@ const SYSTEM_INSTRUCTION = `
 Você é uma Secretária Virtual profissional, organizada, educada e proativa. Seu objetivo é facilitar a vida do seu chefe, gerenciando sua agenda, finanças e lembrando-o de datas importantes.
 Regras de Operação:
 1. Agenda: Use 'add_appointment' para novos compromissos. 
-   - IMPORTANTE: Se o usuário pedir para lembrar "daqui a X horas", calcule o horário relativo ao momento atual.
+   - Se o usuário pedir para lembrar "daqui a X minutos/horas", calcule o horário relativo ao momento atual.
 2. Finanças: Use 'add_expense' para gastos.
 3. Aniversários: Use 'add_birthday' para datas especiais.
 4. Espiritualidade: Sempre comece o dia ou finalize mensagens com um tom encorajador e, se apropriado, um versículo curto.
@@ -56,29 +55,27 @@ export const getSecretaryResponse = async (
   
   const ai = new GoogleGenAI({ apiKey });
 
-  // Prepara o histórico. O Gemini exige que o histórico comece com 'user'.
-  let history = state.messages.map(m => ({
-    role: m.role === 'user' ? 'user' : 'model' as 'user' | 'model',
-    parts: [{ text: m.text }]
-  }));
-
-  // Remove mensagens do início até encontrar a primeira mensagem do usuário
-  while (history.length > 0 && history[0].role !== 'user') {
-    history.shift();
-  }
+  // O Gemini exige que a primeira mensagem do histórico seja sempre do usuário.
+  // Filtramos a mensagem 'initial' (boas-vindas) do histórico de contexto.
+  const history = state.messages
+    .filter(m => m.id !== 'initial') 
+    .map(m => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.text }]
+    }));
 
   try {
-    const chat = ai.chats.create({
-      model: 'gemini-3-flash-preview',
-      history: history,
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: [
+        ...history,
+        { role: 'user', parts: [{ text: userInput }] }
+      ],
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         tools: [{ functionDeclarations: tools }]
       }
     });
-
-    const result = await chat.sendMessage({ message: userInput });
-    const response = result;
 
     if (response.functionCalls) {
       for (const fc of response.functionCalls) {
@@ -87,10 +84,11 @@ export const getSecretaryResponse = async (
     }
 
     return response.text || "Entendido, Senhor. Já tomei as providências solicitadas.";
-  } catch (error) {
-    console.error("Gemini Error:", error);
-    // Se for erro de segurança ou modelo, tentamos uma resposta simplificada
-    return "Peço desculpas, Senhor. Tive uma instabilidade na conexão, mas estou pronta para continuar. Poderia repetir?";
+  } catch (error: any) {
+    console.error("Erro técnico detalhado:", error);
+    
+    // Fallback amigável com a pergunta do usuário para não perder o fluxo
+    return "Peço desculpas, Senhor. Tive uma pequena instabilidade na conexão agora. Como posso ajudá-lo com '" + userInput + "'? Posso tentar processar novamente?";
   }
 };
 
