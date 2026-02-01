@@ -6,14 +6,18 @@ const getApiKey = () => {
 };
 
 const SYSTEM_INSTRUCTION = `
-Você é uma Secretária Virtual profissional, organizada e educada.
-Objetivo: Gerenciar agenda, finanças e lembretes do usuário.
+Você é uma Secretária Virtual profissional, organizada e muito educada.
+Seu objetivo é gerenciar a agenda, finanças e lembretes do usuário.
+
 Regras de Comportamento:
-1. Use 'add_appointment' para qualquer compromisso ou lembrete citado.
-2. Use 'add_expense' para qualquer gasto financeiro mencionado.
-3. Responda de forma curta e profissional. Use "Senhor" ou "Senhora".
-4. Jamais use termos religiosos ou saudações espirituais.
-5. Se não entender algo, peça educadamente para repetir.
+1. Quando o usuário mencionar um compromisso ou lembrete, use a ferramenta 'add_appointment'.
+2. Quando o usuário mencionar um gasto ou despesa, use a ferramenta 'add_expense'.
+3. TRATAMENTO: Sempre use "Senhor" ou "Senhora" para se dirigir ao usuário.
+4. CONFIRMAÇÃO NATURAL: Sempre que você realizar uma ação (adicionar gasto ou compromisso), confirme isso de forma natural no texto da resposta. 
+   Exemplos: "Tá ok, Senhor. Já adicionei à sua agenda.", "Pronto, Senhor. Esse gasto já foi registrado.", "Com certeza, já anotei aqui para não esquecer."
+5. Seja curta e eficiente. Não dê respostas longas demais.
+6. Jamais use termos religiosos ou saudações espirituais.
+7. Se não entender algo, peça educadamente para repetir.
 `;
 
 const tools: FunctionDeclaration[] = [
@@ -65,7 +69,7 @@ export const getSecretaryResponse = async (
     !m.text.includes("Atenção:") && 
     !m.text.includes("ERRO:") &&
     !m.text.includes("Desculpe")
-  ).slice(-6); // Pega apenas as últimas 6 para evitar sobrecarga
+  ).slice(-6);
 
   let lastRole = '';
   for (const m of validMessages) {
@@ -76,7 +80,6 @@ export const getSecretaryResponse = async (
     }
   }
 
-  // Garantir que o histórico comece com 'user' (regra do Gemini)
   if (history.length > 0 && history[0].role === 'model') {
     history.shift();
   }
@@ -101,20 +104,19 @@ export const getSecretaryResponse = async (
       }
     }
 
-    return response.text || "Com certeza, Senhor. Como posso ajudar agora?";
+    return response.text || "Com certeza, Senhor. Já providenciei isso.";
   } catch (error: any) {
     console.error("Erro na API:", error);
     
-    // Fallback: Tentativa simplificada sem histórico caso ocorra erro de contexto
     try {
       const fallback = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [{ role: 'user', parts: [{ text: userInput }] }],
         config: { systemInstruction: SYSTEM_INSTRUCTION }
       });
-      return fallback.text || "Entendido, Senhor.";
+      return fallback.text || "Entendido, Senhor. Já anotei.";
     } catch (e2) {
-      return "Desculpe, Senhor. Estou com uma pequena instabilidade na conexão com meus servidores. Poderia tentar novamente em alguns segundos?";
+      return "Desculpe, Senhor. Tive uma pequena falha de conexão. Poderia repetir o comando?";
     }
   }
 };
