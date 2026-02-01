@@ -1,14 +1,12 @@
-
 {
-  "name": "secretaria-virtual-ai",
+  "name": "secretaria-virtual",
   "version": "1.0.0",
-  "description": "Secretária Virtual Inteligente integrada ao WhatsApp Web Style",
-  "main": "index.html",
+  "private": true,
   "scripts": {
     "start": "npx serve .",
-    "build": "echo 'No build step needed for static ESM'"
+    "build": "echo 'Build concluído'"
   },
   "dependencies": {
-    "serve": "^14.2.4"
+    "serve": "14.2.4"
   }
 }
