@@ -28,7 +28,7 @@ const App: React.FC = () => {
       goals: [],
       monthlyBudget: 0,
       birthdays: [],
-      messages: [{ id: '1', role: 'model', text: 'Olá! Sou sua assistente avançada. Pronto para atingir suas metas financeiras e organizar sua semana?', timestamp: new Date() }]
+      messages: [{ id: '1', role: 'model', text: 'Olá! Sou sua assistente premium. Posso organizar sua agenda, gerenciar suas finanças ou tirar qualquer dúvida que você tiver. Como começamos?', timestamp: new Date() }]
     };
   });
 
@@ -125,7 +125,7 @@ const App: React.FC = () => {
             <div className="w-10 h-10 rounded-full bg-emerald-700 flex items-center justify-center border-2 border-emerald-400 font-bold shadow-inner">SV</div>
             <div>
               <h1 className="font-bold text-sm md:text-lg leading-tight">Secretária Premium</h1>
-              <p className="text-emerald-300 text-[10px] uppercase font-bold tracking-widest">IA Financeira & Agenda</p>
+              <p className="text-emerald-300 text-[10px] uppercase font-bold tracking-widest">Finanças, Agenda & Respostas</p>
             </div>
           </div>
           <div className="flex space-x-2">
@@ -145,11 +145,11 @@ const App: React.FC = () => {
                   </div>
                 </div>
               ))}
-              {isTyping && <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-white/70 w-fit px-4 py-1.5 rounded-full animate-pulse shadow-sm">Processando...</div>}
+              {isTyping && <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-white/70 w-fit px-4 py-1.5 rounded-full animate-pulse shadow-sm">Consultando...</div>}
             </main>
             <footer className="bg-[#f0f2f5] p-4 flex border-t border-gray-200">
               <form className="flex-1 flex space-x-3" onSubmit={handleSendMessage}>
-                <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="Defina uma meta, registre um gasto fixo..." className="flex-1 p-3.5 px-6 rounded-full outline-none bg-white text-sm shadow-inner border border-gray-200 focus:border-emerald-400 transition-colors" />
+                <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="Dúvidas gerais, metas ou finanças..." className="flex-1 p-3.5 px-6 rounded-full outline-none bg-white text-sm shadow-inner border border-gray-200 focus:border-emerald-400 transition-colors" />
                 <button type="submit" className="p-3.5 rounded-full bg-emerald-700 text-white shadow-lg hover:bg-emerald-800 active:scale-95 transition-all"><Send size={22} /></button>
               </form>
             </footer>
