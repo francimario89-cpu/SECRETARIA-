@@ -61,9 +61,13 @@ const App: React.FC = () => {
     e?.preventDefault();
     if (!inputText.trim() || isTyping) return;
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', text: inputText, timestamp: new Date() };
-    setState(prev => ({ ...prev, messages: [...prev.messages, userMsg] }));
     const currentInput = inputText;
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', text: currentInput, timestamp: new Date() };
+    
+    // Atualiza o estado local IMEDIATAMENTE para o UI refletir a mensagem do usuário
+    const updatedMessages = [...state.messages, userMsg];
+    setState(prev => ({ ...prev, messages: updatedMessages }));
+    
     setInputText('');
     setIsTyping(true);
 
@@ -77,16 +81,19 @@ const App: React.FC = () => {
         } else if (name === 'add_appointment') {
           newState.appointments = [...prev.appointments, { id: Math.random().toString(36).substr(2, 9), description: args.description, dateTime: args.dateTime, urgent: !!args.urgent, status: 'pending', items: args.items || [] }];
         } else if (name === 'add_transaction') {
-          newState.transactions = [...prev.transactions, { id: Math.random().toString(36).substr(2, 9), amount: args.amount, type: args.type, category: args.category, date: new Date().toISOString(), description: args.description || '', isRecurring: args.isRecurring }];
+          newState.transactions = [...prev.transactions, { id: Math.random().toString(36).substr(2, 9), amount: Number(args.amount), type: args.type, category: args.category, date: new Date().toISOString(), description: args.description || '', isRecurring: args.isRecurring }];
         }
         return newState;
       });
     };
 
-    const aiResponseText = await getSecretaryResponse(currentInput, state, handleTool);
+    // Chamamos a API passando o estado ATUALIZADO com a mensagem do usuário
+    const aiResponseText = await getSecretaryResponse(currentInput, { ...state, messages: updatedMessages }, handleTool);
+    
     setIsTyping(false);
     const aiMsg: Message = { id: (Date.now()+1).toString(), role: 'model', text: aiResponseText, timestamp: new Date() };
-    setState(prev => ({ ...prev, messages: [...prev.messages, aiMsg] }));
+    setState(prev => ({ ...prev, messages: [...prev.messages, userMsg, aiMsg] })); // Garante a ordem correta
+
     if (isVoiceEnabled) {
       const audio = await generateSpeech(aiResponseText);
       if (audio) playAudio(audio);
