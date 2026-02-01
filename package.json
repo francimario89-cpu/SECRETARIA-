@@ -2,11 +2,26 @@
   "name": "secretaria-virtual",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "start": "npx serve .",
-    "build": "echo 'Build concluído'"
+    "dev": "vite",
+    "build": "vite build",
+    "start": "npx serve dist",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "serve": "14.2.4"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "lucide-react": "^0.468.0",
+    "recharts": "^2.15.0",
+    "@google/genai": "^0.21.0",
+    "serve": "^14.2.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
   }
 }
