@@ -15,8 +15,6 @@ const getSystemInstruction = (state: AppState) => {
   const savings = Math.max(0, totalIncome - totalExpense);
   const healthScore = totalIncome > 0 ? Math.round((savings / totalIncome) * 100) : 0;
   
-  const goalsInfo = state.goals.map(g => `- ${g.title}: R$ ${g.currentAmount}/${g.targetAmount}`).join('\n');
-
   return `
 Você é uma Secretária Virtual Premium e Consultora de Conhecimento.
 CONTEXTO: Hoje é ${dateStr}.
@@ -25,23 +23,37 @@ STATUS FINANCEIRO: Score ${healthScore}/100 | Saldo R$ ${savings.toFixed(2)}.
 
 Suas Diretrizes de Resposta:
 1. TRATAMENTO: Jamais use "Senhor" ou "Senhora". Seja direta, moderna e profissional.
-2. CONHECIMENTO GERAL: Você agora pode tirar dúvidas sobre qualquer assunto (ciência, história, notícias, culinária, etc.).
-3. RESUMO CRÍTICO: Respostas de conhecimento geral DEVEM ser extremamente curtas. Use no máximo 3 parágrafos ou tópicos. Seja "direta ao ponto".
-4. FINANÇAS: Continue proativa. Se o gasto for recorrente, use a ferramenta adequada.
-5. FERRAMENTAS: Sempre acione as funções de agenda ou finanças antes de dar o texto de confirmação.
-
-Exemplo de tom para dúvidas gerais:
-Usuário: "O que foi a Revolução Francesa?"
-Resposta: "Movimento político iniciado em 1789 que derrubou a monarquia absoluta na França. 
-Pontos principais:
-- Queda da Bastilha.
-- Declaração dos Direitos do Homem.
-- Ascensão de Napoleão.
-Algo mais em que posso ajudar?"
+2. CONHECIMENTO GERAL: Você pode tirar dúvidas sobre qualquer assunto de forma resumida (máximo 3 tópicos).
+3. LISTAS INTELIGENTES: Sempre que o usuário pedir para agendar algo que envolva compras ou ingredientes (ex: "comprar itens para bolo"), use a ferramenta 'add_appointment' e preencha o campo 'items' com a lista detalhada de ingredientes e quantidades sugeridas. Seja proativa em sugerir as quantidades corretas para receitas comuns.
+4. FINANÇAS: Proatividade em gastos recorrentes e metas de poupança.
 `;
 };
 
 const tools: FunctionDeclaration[] = [
+  {
+    name: 'add_appointment',
+    description: 'Adiciona compromisso à agenda, opcionalmente com uma lista de itens (ex: lista de compras).',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        description: { type: Type.STRING },
+        dateTime: { type: Type.STRING, description: 'ISO 8601' },
+        urgent: { type: Type.BOOLEAN },
+        items: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              quantity: { type: Type.STRING }
+            },
+            required: ['name', 'quantity']
+          }
+        }
+      },
+      required: ['description', 'dateTime']
+    }
+  },
   {
     name: 'add_transaction',
     description: 'Registra uma entrada ou saída financeira.',
@@ -82,19 +94,6 @@ const tools: FunctionDeclaration[] = [
       },
       required: ['goalId', 'amountToAdd']
     }
-  },
-  {
-    name: 'add_appointment',
-    description: 'Adiciona compromisso à agenda.',
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        description: { type: Type.STRING },
-        dateTime: { type: Type.STRING },
-        urgent: { type: Type.BOOLEAN }
-      },
-      required: ['description', 'dateTime']
-    }
   }
 ];
 
@@ -106,7 +105,6 @@ export const getSecretaryResponse = async (
   const apiKey = getApiKey();
   const ai = new GoogleGenAI({ apiKey });
 
-  // Manter histórico curto para contexto de dúvidas gerais
   const history = state.messages.slice(-4).map(m => ({
     role: m.role === 'user' ? 'user' : 'model',
     parts: [{ text: m.text }]
@@ -125,9 +123,9 @@ export const getSecretaryResponse = async (
     if (response.functionCalls) {
       for (const fc of response.functionCalls) onToolCall(fc.name, fc.args);
     }
-    return response.text || "Entendido. Como posso ajudar agora?";
+    return response.text || "Entendido. Agenda atualizada.";
   } catch (error) {
-    return "Houve um erro na minha conexão. Pode repetir a pergunta?";
+    return "Houve um erro na minha conexão. Pode repetir?";
   }
 };
 

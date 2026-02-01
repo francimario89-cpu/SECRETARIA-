@@ -5,6 +5,7 @@ export interface Appointment {
   dateTime: string;
   urgent: boolean;
   status: 'pending' | 'completed';
+  items?: { name: string; quantity: string }[];
 }
 
 export interface Transaction {
