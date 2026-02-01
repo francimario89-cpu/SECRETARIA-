@@ -5,44 +5,54 @@ const getApiKey = () => {
   return process.env.API_KEY || '';
 };
 
-const SYSTEM_INSTRUCTION = `
-Você é uma Secretária Virtual profissional, organizada e muito educada.
-Seu objetivo é gerenciar a agenda, finanças e lembretes do usuário.
+const getSystemInstruction = () => {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('pt-BR');
+  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const dayOfWeek = now.toLocaleDateString('pt-BR', { weekday: 'long' });
 
-Regras de Comportamento:
-1. Quando o usuário mencionar um compromisso ou lembrete, use a ferramenta 'add_appointment'.
-2. Quando o usuário mencionar um gasto ou despesa, use a ferramenta 'add_expense'.
-3. TRATAMENTO: Sempre use "Senhor" ou "Senhora" para se dirigir ao usuário.
-4. CONFIRMAÇÃO NATURAL: Sempre que você realizar uma ação (adicionar gasto ou compromisso), confirme isso de forma natural no texto da resposta. 
-   Exemplos: "Tá ok, Senhor. Já adicionei à sua agenda.", "Pronto, Senhor. Esse gasto já foi registrado.", "Com certeza, já anotei aqui para não esquecer."
-5. Seja curta e eficiente. Não dê respostas longas demais.
-6. Jamais use termos religiosos ou saudações espirituais.
-7. Se não entender algo, peça educadamente para repetir.
+  return `
+Você é uma Secretária Virtual de alto nível, extremamente organizada, direta e educada.
+CONTEXTO ATUAL: Hoje é ${dayOfWeek}, dia ${dateStr}, agora são ${timeStr}.
+
+Regras de Comunicação:
+1. TRATAMENTO: Utilize sempre "Senhor" ou "Senhora".
+2. VOCABULÁRIO: Seja variada e natural. Use termos como "Agendado", "Tudo pronto", "Registrado", "Lançamento feito", "Anotado". Evite repetições mecânicas.
+3. CONCISÃO: Respostas curtíssimas e eficientes.
+4. FERRAMENTAS (CRITICAL): 
+   - Ao usar 'add_appointment', converta datas relativas (ex: "dia 15", "amanhã", "próxima segunda") para o formato ISO 8601 (YYYY-MM-DDTHH:mm). Se o usuário não disser o ano, assuma o próximo dia 15 disponível (se hoje é maio, e ele diz feveveiro, é para o ano que vem).
+   - Ao usar 'add_expense', registre o valor exato.
+
+Exemplos de Confirmação:
+- "Compromisso para fevereiro agendado, Senhor."
+- "Gasto lançado. Mais algo?"
+- "Lembrete anotado. Tudo certo."
 `;
+};
 
 const tools: FunctionDeclaration[] = [
   {
     name: 'add_appointment',
-    description: 'Adiciona um compromisso ou lembrete à agenda.',
+    description: 'Adiciona um compromisso ou lembrete à agenda com data precisa.',
     parameters: {
       type: Type.OBJECT,
       properties: {
-        description: { type: Type.STRING, description: 'O que deve ser lembrado ou feito.' },
-        dateTime: { type: Type.STRING, description: 'Data e hora (ex: hoje as 15h, amanhã, 20/10).' },
-        urgent: { type: Type.BOOLEAN, description: 'Se o assunto é urgente.' }
+        description: { type: Type.STRING, description: 'O que deve ser lembrado.' },
+        dateTime: { type: Type.STRING, description: 'Data em formato ISO (YYYY-MM-DDTHH:mm).' },
+        urgent: { type: Type.BOOLEAN, description: 'Prioridade alta.' }
       },
       required: ['description', 'dateTime']
     }
   },
   {
     name: 'add_expense',
-    description: 'Registra uma despesa ou gasto financeiro.',
+    description: 'Registra uma despesa financeira.',
     parameters: {
       type: Type.OBJECT,
       properties: {
-        amount: { type: Type.NUMBER, description: 'Valor total do gasto.' },
-        category: { type: Type.STRING, description: 'Categoria (ex: Mercado, Gasolina, Lanche).' },
-        description: { type: Type.STRING, description: 'Detalhe opcional do gasto.' }
+        amount: { type: Type.NUMBER, description: 'Valor numérico.' },
+        category: { type: Type.STRING, description: 'Categoria do gasto.' },
+        description: { type: Type.STRING, description: 'Detalhes do gasto.' }
       },
       required: ['amount', 'category']
     }
@@ -55,20 +65,13 @@ export const getSecretaryResponse = async (
   onToolCall: (name: string, args: any) => void
 ): Promise<string> => {
   const apiKey = getApiKey();
-  
-  if (!apiKey || apiKey.trim() === "" || !apiKey.startsWith("AIza")) {
-    return "Atenção: A chave de API (API_KEY) parece estar incorreta no painel do Render. Por favor, verifique se ela começa com 'AIza'.";
-  }
+  if (!apiKey || !apiKey.startsWith("AIza")) return "Erro: API Key inválida.";
   
   const ai = new GoogleGenAI({ apiKey });
 
-  // Limpeza de histórico para manter apenas mensagens válidas e alternadas
   const history: any[] = [];
   const validMessages = state.messages.filter(m => 
-    m.id !== 'initial' && 
-    !m.text.includes("Atenção:") && 
-    !m.text.includes("ERRO:") &&
-    !m.text.includes("Desculpe")
+    m.id !== 'initial' && !m.text.includes("Atenção:") && !m.text.includes("Erro:")
   ).slice(-6);
 
   let lastRole = '';
@@ -80,19 +83,14 @@ export const getSecretaryResponse = async (
     }
   }
 
-  if (history.length > 0 && history[0].role === 'model') {
-    history.shift();
-  }
+  if (history.length > 0 && history[0].role === 'model') history.shift();
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [
-        ...history,
-        { role: 'user', parts: [{ text: userInput }] }
-      ],
+      contents: [...history, { role: 'user', parts: [{ text: userInput }] }],
       config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
+        systemInstruction: getSystemInstruction(),
         tools: [{ functionDeclarations: tools }],
         temperature: 0.7
       }
@@ -104,26 +102,16 @@ export const getSecretaryResponse = async (
       }
     }
 
-    return response.text || "Com certeza, Senhor. Já providenciei isso.";
+    return response.text || "Providenciado, Senhor.";
   } catch (error: any) {
-    console.error("Erro na API:", error);
-    
-    try {
-      const fallback = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: [{ role: 'user', parts: [{ text: userInput }] }],
-        config: { systemInstruction: SYSTEM_INSTRUCTION }
-      });
-      return fallback.text || "Entendido, Senhor. Já anotei.";
-    } catch (e2) {
-      return "Desculpe, Senhor. Tive uma pequena falha de conexão. Poderia repetir o comando?";
-    }
+    console.error(error);
+    return "Tive um problema técnico, Senhor. Poderia repetir?";
   }
 };
 
 export const generateSpeech = async (text: string): Promise<string | null> => {
   const apiKey = getApiKey();
-  if (!apiKey || !apiKey.startsWith("AIza")) return null;
+  if (!apiKey) return null;
   try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({

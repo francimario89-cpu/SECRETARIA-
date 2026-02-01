@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  PieChart, Pie, Legend, LineChart, Line
+  PieChart, Pie, Legend
 } from 'recharts';
 import { AppState, Appointment, Expense } from '../types';
 import { 
@@ -15,7 +14,6 @@ import {
   CheckCircle, 
   Circle,
   TrendingUp,
-  Filter,
   ArrowRight,
   ListTodo,
   PieChart as PieIcon,
@@ -33,16 +31,28 @@ const Dashboard: React.FC<Props> = ({ state, onToggleStatus, onDeleteAppointment
   const [innerTab, setInnerTab] = useState<'overview' | 'agenda' | 'finances'>('overview');
   const { appointments, expenses, birthdays } = state;
 
-  // --- CÁLCULOS DE PRODUTIVIDADE ---
+  const formatDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleString('pt-BR', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   const completedTasks = appointments.filter(a => a.status === 'completed').length;
   const pendingTasks = appointments.length - completedTasks;
   const completionRate = appointments.length > 0 ? Math.round((completedTasks / appointments.length) * 100) : 0;
-  
-  // --- CÁLCULOS FINANCEIROS ---
   const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
   const avgExpense = expenses.length > 0 ? Math.round(totalSpent / expenses.length) : 0;
 
-  // Agregação Financeira por Categoria
   const expenseByCategory = expenses.reduce((acc: any, curr) => {
     acc[curr.category] = (acc[curr.category] || 0) + curr.amount;
     return acc;
@@ -57,7 +67,6 @@ const Dashboard: React.FC<Props> = ({ state, onToggleStatus, onDeleteAppointment
 
   const renderOverview = () => (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100 transition-all hover:shadow-md">
           <div className="flex items-center justify-between mb-4">
@@ -119,7 +128,6 @@ const Dashboard: React.FC<Props> = ({ state, onToggleStatus, onDeleteAppointment
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Gráfico Financeiro */}
         <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-lg font-bold text-slate-800 flex items-center">
@@ -163,7 +171,6 @@ const Dashboard: React.FC<Props> = ({ state, onToggleStatus, onDeleteAppointment
           </div>
         </div>
 
-        {/* Alertas Urgentes */}
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center">
             <AlertTriangle className="mr-2 text-red-500" size={22} />
@@ -179,7 +186,7 @@ const Dashboard: React.FC<Props> = ({ state, onToggleStatus, onDeleteAppointment
                   </div>
                   <p className="text-sm font-bold text-red-900 leading-tight mb-2">{app.description}</p>
                   <p className="text-[10px] text-red-700 font-bold bg-white w-fit px-2 py-1 rounded-full shadow-sm">
-                    {new Date(app.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatDate(app.dateTime)}
                   </p>
                 </div>
               ))
@@ -246,7 +253,7 @@ const Dashboard: React.FC<Props> = ({ state, onToggleStatus, onDeleteAppointment
                   <td className="px-8 py-5">
                     <div className="flex items-center text-xs text-slate-500 font-bold">
                        <Clock size={12} className="mr-2 opacity-50" />
-                       {new Date(app.dateTime).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                       {formatDate(app.dateTime)}
                     </div>
                   </td>
                   <td className="px-8 py-5 text-right">
@@ -375,7 +382,6 @@ const Dashboard: React.FC<Props> = ({ state, onToggleStatus, onDeleteAppointment
           <p className="text-slate-500 text-sm font-medium mt-1">Sua rotina organizada por Inteligência Artificial.</p>
         </div>
         
-        {/* Navigation Tabs */}
         <div className="flex p-1.5 bg-slate-200/50 backdrop-blur-sm rounded-2xl w-full lg:w-fit shadow-inner">
           <button 
             onClick={() => setInnerTab('overview')}
@@ -398,7 +404,6 @@ const Dashboard: React.FC<Props> = ({ state, onToggleStatus, onDeleteAppointment
         </div>
       </div>
 
-      {/* Renderização das Abas */}
       <div className="min-h-[60vh]">
         {innerTab === 'overview' && renderOverview()}
         {innerTab === 'agenda' && renderAgenda()}
