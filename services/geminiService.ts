@@ -2,15 +2,18 @@
 import { GoogleGenAI, Type, FunctionDeclaration, Modality } from "@google/genai";
 import { AppState } from "../types";
 
+// Fallback para a chave se process.env não estiver disponível
+const getApiKey = () => {
+  return process.env.API_KEY || '';
+};
+
 const SYSTEM_INSTRUCTION = `
 Você é uma Secretária Virtual profissional, organizada, educada e proativa. Seu objetivo é facilitar a vida do seu chefe, gerenciando sua agenda, finanças e lembrando-o de datas importantes.
-
 Regras de Operação:
 1. Agenda: Use 'add_appointment' para novos compromissos.
 2. Finanças: Use 'add_expense' para gastos.
 3. Aniversários: Use 'add_birthday' para datas especiais.
 4. Espiritualidade: Sempre comece o dia ou finalize mensagens com um tom encorajador e, se apropriado, um versículo curto.
-
 Tom de Voz: Cordial e discreto. Use "Senhor" ou "Senhora".
 `;
 
@@ -40,19 +43,6 @@ const tools: FunctionDeclaration[] = [
       },
       required: ['amount', 'category']
     }
-  },
-  {
-    name: 'add_birthday',
-    description: 'Registra um aniversário.',
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        name: { type: Type.STRING },
-        date: { type: Type.STRING },
-        relation: { type: Type.STRING }
-      },
-      required: ['name', 'date']
-    }
   }
 ];
 
@@ -61,7 +51,10 @@ export const getSecretaryResponse = async (
   state: AppState,
   onToolCall: (name: string, args: any) => void
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+  const apiKey = getApiKey();
+  if (!apiKey) return "Atenção: Configure a API_KEY no painel do Render para eu poder responder.";
+  
+  const ai = new GoogleGenAI({ apiKey });
   const history = state.messages.slice(-10).map(m => ({
     role: m.role === 'user' ? 'user' : 'model',
     parts: [{ text: m.text }]
@@ -85,30 +78,32 @@ export const getSecretaryResponse = async (
 
     return response.text || "Entendido, Senhor.";
   } catch (error) {
-    return "Tive um erro técnico, Senhor. Pode repetir?";
+    console.error("Gemini Error:", error);
+    return "Tive um erro técnico ao processar sua solicitação, Senhor.";
   }
 };
 
 export const generateSpeech = async (text: string): Promise<string | null> => {
+  const apiKey = getApiKey();
+  if (!apiKey) return null;
+
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Diga com voz profissional e cordial: ${text}` }] }],
+      contents: [{ parts: [{ text: `Diga com voz profissional: ${text}` }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' } // Voz feminina/neutra profissional
+            prebuiltVoiceConfig: { voiceName: 'Kore' }
           }
         }
       }
     });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    return base64Audio || null;
+    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
   } catch (e) {
-    console.error("TTS Error", e);
     return null;
   }
 };
