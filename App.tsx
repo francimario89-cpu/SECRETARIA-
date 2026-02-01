@@ -18,15 +18,26 @@ const App: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
+  
   const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem('secretary_state');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return {
-        ...parsed,
-        messages: parsed.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
-      };
+    try {
+      const saved = localStorage.getItem('secretary_state');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          appointments: parsed.appointments || [],
+          expenses: parsed.expenses || [],
+          birthdays: parsed.birthdays || [],
+          messages: (parsed.messages || []).map((m: any) => ({ 
+            ...m, 
+            timestamp: m.timestamp ? new Date(m.timestamp) : new Date() 
+          }))
+        };
+      }
+    } catch (e) {
+      console.error("Erro ao carregar estado salvo:", e);
     }
+    
     return {
       appointments: [],
       expenses: [],
@@ -54,28 +65,30 @@ const App: React.FC = () => {
   }, [state.messages]);
 
   const playAudio = async (base64: string) => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-    }
-    const ctx = audioContextRef.current;
-    
-    // Decode base64 to ArrayBuffer
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    
-    // PCM decoding
-    const dataInt16 = new Int16Array(bytes.buffer);
-    const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
-    const channelData = buffer.getChannelData(0);
-    for (let i = 0; i < dataInt16.length; i++) {
-      channelData[i] = dataInt16[i] / 32768.0;
-    }
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      }
+      const ctx = audioContextRef.current;
+      
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      
+      const dataInt16 = new Int16Array(bytes.buffer);
+      const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
+      const channelData = buffer.getChannelData(0);
+      for (let i = 0; i < dataInt16.length; i++) {
+        channelData[i] = dataInt16[i] / 32768.0;
+      }
 
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start();
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start();
+    } catch (e) {
+      console.error("Erro ao reproduzir áudio:", e);
+    }
   };
 
   const handleSendMessage = async (e?: React.FormEvent) => {
@@ -116,26 +129,31 @@ const App: React.FC = () => {
       }
     };
 
-    const aiResponseText = await getSecretaryResponse(currentInput, state, handleTool);
-    setIsTyping(false);
+    try {
+      const aiResponseText = await getSecretaryResponse(currentInput, state, handleTool);
+      setIsTyping(false);
 
-    const aiMsg: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'model',
-      text: aiResponseText,
-      timestamp: new Date()
-    };
-    setState(prev => ({ ...prev, messages: [...prev.messages, aiMsg] }));
+      const aiMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'model',
+        text: aiResponseText,
+        timestamp: new Date()
+      };
+      setState(prev => ({ ...prev, messages: [...prev.messages, aiMsg] }));
 
-    if (isVoiceEnabled) {
-      const audio = await generateSpeech(aiResponseText);
-      if (audio) playAudio(audio);
+      if (isVoiceEnabled) {
+        const audio = await generateSpeech(aiResponseText);
+        if (audio) playAudio(audio);
+      }
+    } catch (error) {
+      console.error("Erro na resposta da IA:", error);
+      setIsTyping(false);
     }
   };
 
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden flex-col md:flex-row">
-      {/* Sidebar - Agora na parte inferior em telas pequenas */}
+      {/* Sidebar */}
       <div className="w-full md:w-20 bg-emerald-950 flex md:flex-col items-center justify-around md:justify-start md:py-6 md:space-y-8 shadow-2xl z-20 order-2 md:order-1 h-16 md:h-full">
         <button 
           onClick={() => setActiveTab('chat')}
@@ -168,7 +186,7 @@ const App: React.FC = () => {
               <p className="text-emerald-200 text-[10px] uppercase font-bold tracking-tighter">Online agora</p>
             </div>
           </div>
-          <button onClick={() => window.location.reload()} className="text-emerald-300"><RefreshCw size={18} /></button>
+          <button onClick={() => window.location.reload()} className="text-emerald-300 transition-transform active:rotate-180"><RefreshCw size={18} /></button>
         </header>
 
         {activeTab === 'chat' ? (
@@ -177,7 +195,7 @@ const App: React.FC = () => {
               {state.messages.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[85%] p-3 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-[#dcf8c6] rounded-tr-none' : 'bg-white rounded-tl-none'}`}>
-                    <p className="text-gray-800 text-sm md:text-base">{msg.text}</p>
+                    <p className="text-gray-800 text-sm md:text-base whitespace-pre-wrap">{msg.text}</p>
                     <div className="flex justify-end items-center mt-1 space-x-1">
                       <span className="text-[10px] text-gray-500">
                         {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -187,7 +205,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
               ))}
-              {isTyping && <div className="text-xs text-gray-400 italic">Digitando...</div>}
+              {isTyping && <div className="text-xs text-emerald-800 bg-white/50 w-fit px-2 py-1 rounded-full animate-pulse">Digitando...</div>}
               <div ref={chatEndRef} />
             </main>
 
@@ -198,18 +216,29 @@ const App: React.FC = () => {
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder="Diga algo para mim..."
-                  className="flex-1 p-3 px-5 rounded-full outline-none shadow-inner text-sm"
+                  className="flex-1 p-3 px-5 rounded-full outline-none shadow-inner text-sm bg-white"
                 />
-                <button type="submit" className="p-3 bg-emerald-700 text-white rounded-full"><Send size={20} /></button>
+                <button type="submit" className="p-3 bg-emerald-700 text-white rounded-full transition-transform active:scale-90 shadow-md">
+                  <Send size={20} />
+                </button>
               </form>
             </footer>
           </>
         ) : (
           <Dashboard 
             state={state} 
-            onToggleStatus={() => {}} 
-            onDeleteAppointment={() => {}} 
-            onDeleteExpense={() => {}} 
+            onToggleStatus={(id) => {
+              setState(prev => ({
+                ...prev,
+                appointments: prev.appointments.map(a => a.id === id ? { ...a, status: a.status === 'completed' ? 'pending' : 'completed' } : a)
+              }));
+            }} 
+            onDeleteAppointment={(id) => {
+              setState(prev => ({ ...prev, appointments: prev.appointments.filter(a => a.id !== id) }));
+            }} 
+            onDeleteExpense={(id) => {
+              setState(prev => ({ ...prev, expenses: prev.expenses.filter(e => e.id !== id) }));
+            }} 
           />
         )}
       </div>
